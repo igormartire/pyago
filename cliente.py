@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 
 import socket
-from modelos import Usuario
+from usuario import Usuario
 from constantes import (MSG_FAZ_LOGIN,
                         MSG_LISTA_LEILOES,
-                        MSG_ADICIONA_USUARIO)
+                        MSG_ADICIONA_USUARIO,
+                        MSG_LANCA_PRODUTO)
+
 
 class Cliente:
 
@@ -21,13 +23,20 @@ class Cliente:
                             usuario.endereco, usuario.email, usuario.senha)
         return self.recebe_resposta() == 'ok'
 
-    def login(self, nome, senha):
+    def faz_login(self, nome, senha):
         self.envia_mensagem(MSG_FAZ_LOGIN, nome, senha)
         return self.recebe_resposta() == 'ok'
 
     def lista_leiloes(self):
         self.envia_mensagem(MSG_LISTA_LEILOES)
         return self.recebe_resposta()
+
+    def lanca_produto(self, nome, descricao, lance_minimo,
+                      datahora_inicio, tempo_max_sem_lances):
+        self.envia_mensagem(MSG_LANCA_PRODUTO, nome, descricao,
+                            str(lance_minimo), datahora_inicio,
+                            str(tempo_max_sem_lances))
+        return self.recebe_resposta() == 'ok'
 
     def envia_mensagem(self, *campos):
         self.socket.sendall(','.join(campos))
@@ -70,7 +79,7 @@ def main():
         elif opcao == '2':
             nome = raw_input('Entre com o nome: ')
             senha = raw_input('Entre com a senha: ')
-            ok = cliente.login(nome, senha)
+            ok = cliente.faz_login(nome, senha)
             if ok:
                 print 'Logado com sucesso.'
                 logado = True

@@ -2,12 +2,14 @@
 
 import socket
 import threading
-from modelos import Usuario
+from usuario import Usuario
+from leilao import Leilao
 import arquivo
 from constantes import (MSG_FAZ_LOGIN,
                         MSG_LISTA_LEILOES,
                         MSG_ADICIONA_USUARIO,
-                        MSG_LISTAGEM)
+                        MSG_LISTAGEM,
+                        MSG_LANCA_PRODUTO)
 
 
 class Servidor:
@@ -83,6 +85,12 @@ class Conexao:
                     self.faz_login(*campos[1:])
                 elif campos[0] == MSG_LISTA_LEILOES:
                     self.lista_leiloes()
+                else:
+                    if self.logado:
+                        if campos[0] == MSG_LANCA_PRODUTO:
+                            self.lanca_produto(*campos[1:])
+                    else:
+                        self.responde_erro()
 
                 mensagem = self.conexao.recv(4096)
         finally:
@@ -95,7 +103,7 @@ class Conexao:
                 self.responde_erro()
             else:
                 new_u = Usuario(nome, telefone, endereco, email, senha)
-                self.arquivo.escreve_usuario(new_u)
+                self.arquivo.salva_usuario(new_u)
                 self.responde_sucesso()
         except ValueError:
             self.responde_erro()
@@ -116,6 +124,17 @@ class Conexao:
             self.conexao.sendall(','.join([MSG_LISTAGEM, listagem_str]))
         else:
             self.conexao.sendall(MSG_LISTAGEM)
+
+    def lanca_produto(self, nome, descricao, lance_minimo,
+                      datahora_inicio, tempo_max_sem_lances):
+        try:
+            novo_leilao = Leilao(
+                nome, descricao, float(lance_minimo),
+                datahora_inicio, tempo_max_sem_lances, self.usuario.nome)
+            self.arquivo.salva_leilao(novo_leilao)
+            self.responde_sucesso()
+        except ValueError:
+            self.responde_erro()
 
     def responde_erro(self):
         self.conexao.sendall('not_ok')

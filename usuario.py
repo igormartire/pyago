@@ -1,10 +1,5 @@
 # -*- coding: utf-8 -*-
 
-"""
-    Arquivo onde estão todas as classes que representam entidades
-    a serem persistidas, isto é, salvas em um arquivo no disco.
-"""
-
 
 class Usuario:
 
@@ -38,9 +33,6 @@ class Usuario:
                 self.email == other.email and \
                 self.senha == other.senha
         return NotImplemented
-
-    def nome_igual(self, u):
-        return self.nome == u.nome
 
     @staticmethod
     def texto_para_usuario(texto):

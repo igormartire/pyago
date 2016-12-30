@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 
 from cliente import Cliente
-from modelos import Usuario
+from usuario import Usuario
+from leilao import Leilao
 import arquivo
 import unittest
 from servidor import Servidor
+import threading
 
 """
     Arquivo de testes de integração entre cliente e servidor.
@@ -18,6 +20,7 @@ Usuario.yago = Usuario("Yago", "1111-1111", "Rua Y",
 Usuario.riguel = Usuario("Ríguel", "222-222", "Rua R",
                          "riguel@riguel.com", "123abc")
 
+NUMERO_DE_THREADS = 10
 
 class Teste(unittest.TestCase):
 
@@ -48,18 +51,101 @@ class Teste(unittest.TestCase):
 
     def test_login_com_usuario_e_senha_corretos(self):
         self.cliente.adiciona_usuario(Usuario.yago)
-        self.assertTrue(self.cliente.login(Usuario.yago.nome,
-                                           Usuario.yago.senha))
+        self.assertTrue(self.cliente.faz_login(Usuario.yago.nome,
+                                               Usuario.yago.senha))
 
     def test_login_com_usuario_errado(self):
         self.cliente.adiciona_usuario(Usuario.yago)
-        self.assertFalse(self.cliente.login(Usuario.riguel.nome,
-                                            Usuario.yago.senha))
+        self.assertFalse(self.cliente.faz_login(Usuario.riguel.nome,
+                                                Usuario.yago.senha))
 
     def test_login_com_senha_errada(self):
         self.cliente.adiciona_usuario(Usuario.yago)
-        self.assertFalse(self.cliente.login(Usuario.yago.nome,
-                                            Usuario.riguel.senha))
+        self.assertFalse(self.cliente.faz_login(Usuario.yago.nome,
+                                                Usuario.riguel.senha))
+
+    def test_lanca_produto_com_usuario_deslogado(self):
+        self.assertFalse(self.cliente.lanca_produto(
+            'Laptop', 'Macbook Pro Late 2016',
+            8000, '25/01/2017 15:45:00', 300
+        ))
+
+    def test_lanca_produto_com_usuario_logado(self):
+        self.cliente.adiciona_usuario(Usuario.yago)
+        self.cliente.faz_login(Usuario.yago.nome, Usuario.yago.senha)
+        self.assertTrue(self.cliente.lanca_produto(
+            'Laptop', 'Macbook Pro Late 2016', 8000,
+            '25/01/2017 15:45:00', 300
+        ))
+        self.assertEquals(
+            self.arquivo.get_leilao_por_identificador(1),
+            Leilao(
+                'Laptop', 'Macbook Pro Late 2016', 8000,
+                '25/01/2017 15:45:00', 300, Usuario.yago.nome, 1
+            )
+        )
+
+    def test_lanca_produto_sem_nome(self):
+        self.cliente.adiciona_usuario(Usuario.yago)
+        self.cliente.faz_login(Usuario.yago.nome, Usuario.yago.senha)
+        self.assertFalse(self.cliente.lanca_produto(
+            '', 'Macbook Pro Late 2016', 8000,
+            '25/01/2017 15:45:00', 300
+        ))
+
+    def test_lanca_produto_duas_vezes(self):
+        self.cliente.adiciona_usuario(Usuario.yago)
+        self.cliente.faz_login(Usuario.yago.nome, Usuario.yago.senha)
+        self.assertTrue(self.cliente.lanca_produto(
+            'Laptop', 'Macbook Pro Late 2016', 8000,
+            '25/01/2017 15:45:00', 300
+        ))
+        self.assertTrue(self.cliente.lanca_produto(
+            'Laptop', 'Macbook Pro Late 2016', 8000,
+            '25/01/2017 15:45:00', 300
+        ))
+        self.assertEquals(
+            self.arquivo.get_leilao_por_identificador(1),
+            Leilao(
+                'Laptop', 'Macbook Pro Late 2016', 8000,
+                '25/01/2017 15:45:00', 300, Usuario.yago.nome, 1
+            )
+        )
+        self.assertEquals(
+            self.arquivo.get_leilao_por_identificador(2),
+            Leilao(
+                'Laptop', 'Macbook Pro Late 2016', 8000,
+                '25/01/2017 15:45:00', 300, Usuario.yago.nome, 2
+            )
+        )
+
+    def test_lanca_produtos_em_paralelo(self):
+        def loga_e_lanca_produto():
+            cliente = Cliente(timeout=3)
+            cliente.faz_login(Usuario.yago.nome, Usuario.yago.senha)
+            self.assertTrue(
+                cliente.lanca_produto(
+                    'Laptop', 'Macbook Pro Late 2016', 8000,
+                    '25/01/2017 15:45:00', 300
+                )
+            )
+        self.cliente.adiciona_usuario(Usuario.yago)
+        threads = []
+        for i in range(1, NUMERO_DE_THREADS+1):
+            t = threading.Thread(target=loga_e_lanca_produto)
+            threads.append(t)
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        for i in range(1, NUMERO_DE_THREADS+1):
+            self.assertEquals(
+                self.arquivo.get_leilao_por_identificador(i),
+                Leilao(
+                    'Laptop', 'Macbook Pro Late 2016', 8000,
+                    '25/01/2017 15:45:00', 300, Usuario.yago.nome, i
+                )
+            )
 
     def test_lista_leiloes_sem_leiloes(self):
         self.assertEqual(self.cliente.lista_leiloes(), "Listagem")
