@@ -5,7 +5,8 @@ from usuario import Usuario
 from constantes import (MSG_FAZ_LOGIN,
                         MSG_LISTA_LEILOES,
                         MSG_ADICIONA_USUARIO,
-                        MSG_LANCA_PRODUTO)
+                        MSG_LANCA_PRODUTO,
+                        MSG_ENTRAR_LEILAO)
 
 
 class Cliente:
@@ -34,12 +35,16 @@ class Cliente:
     def lanca_produto(self, nome, descricao, lance_minimo,
                       datahora_inicio, tempo_max_sem_lances):
         self.envia_mensagem(MSG_LANCA_PRODUTO, nome, descricao,
-                            str(lance_minimo), datahora_inicio,
-                            str(tempo_max_sem_lances))
+                            lance_minimo, datahora_inicio,
+                            tempo_max_sem_lances)
+        return self.recebe_resposta() == 'ok'
+
+    def entrar_leilao(self, identificador_leilao):
+        self.envia_mensagem(MSG_ENTRAR_LEILAO, identificador_leilao)
         return self.recebe_resposta() == 'ok'
 
     def envia_mensagem(self, *campos):
-        self.socket.sendall(','.join(campos))
+        self.socket.sendall(','.join(map(str, campos)))
 
     def recebe_resposta(self, tamanho=32768):
         return self.socket.recv(tamanho)

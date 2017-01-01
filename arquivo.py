@@ -66,7 +66,14 @@ class Gerenciador:
                 f.write(str(leilao) + '\n')
 
     def get_listagem_leiloes(self):
-        return []
+        listagem = []
+        with self.semaforo_leiloes:
+            with open(arquivo_leiloes, 'r') as f:
+                for linha in f:
+                    if linha != '\n':
+                        leilao_linha = Leilao.texto_para_leilao(linha)
+                        listagem.append(leilao_linha)
+        return listagem
 
     # http://stackoverflow.com/questions/4914277/how-to-empty-a-file-using-python
     def apagar_todos(self):

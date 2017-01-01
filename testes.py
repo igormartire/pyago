@@ -2,11 +2,13 @@
 
 from cliente import Cliente
 from usuario import Usuario
-from leilao import Leilao
+from leilao import Leilao, FORMATO_DATAHORA
 import arquivo
 import unittest
 from servidor import Servidor
 import threading
+from datetime import datetime
+from time import time
 
 """
     Arquivo de testes de integração entre cliente e servidor.
@@ -21,6 +23,7 @@ Usuario.riguel = Usuario("Ríguel", "222-222", "Rua R",
                          "riguel@riguel.com", "123abc")
 
 NUMERO_DE_THREADS = 10
+
 
 class Teste(unittest.TestCase):
 
@@ -74,13 +77,13 @@ class Teste(unittest.TestCase):
         self.cliente.adiciona_usuario(Usuario.yago)
         self.cliente.faz_login(Usuario.yago.nome, Usuario.yago.senha)
         self.assertTrue(self.cliente.lanca_produto(
-            'Laptop', 'Macbook Pro Late 2016', 8000,
+            'Laptop', 'Macbook Pro Late 2016', 8000.00,
             '25/01/2017 15:45:00', 300
         ))
         self.assertEquals(
             self.arquivo.get_leilao_por_identificador(1),
             Leilao(
-                'Laptop', 'Macbook Pro Late 2016', 8000,
+                'Laptop', 'Macbook Pro Late 2016', 8000.00,
                 '25/01/2017 15:45:00', 300, Usuario.yago.nome, 1
             )
         )
@@ -89,7 +92,7 @@ class Teste(unittest.TestCase):
         self.cliente.adiciona_usuario(Usuario.yago)
         self.cliente.faz_login(Usuario.yago.nome, Usuario.yago.senha)
         self.assertFalse(self.cliente.lanca_produto(
-            '', 'Macbook Pro Late 2016', 8000,
+            '', 'Macbook Pro Late 2016', 8000.00,
             '25/01/2017 15:45:00', 300
         ))
 
@@ -97,24 +100,24 @@ class Teste(unittest.TestCase):
         self.cliente.adiciona_usuario(Usuario.yago)
         self.cliente.faz_login(Usuario.yago.nome, Usuario.yago.senha)
         self.assertTrue(self.cliente.lanca_produto(
-            'Laptop', 'Macbook Pro Late 2016', 8000,
+            'Laptop', 'Macbook Pro Late 2016', 8000.00,
             '25/01/2017 15:45:00', 300
         ))
         self.assertTrue(self.cliente.lanca_produto(
-            'Laptop', 'Macbook Pro Late 2016', 8000,
+            'Laptop', 'Macbook Pro Late 2016', 8000.00,
             '25/01/2017 15:45:00', 300
         ))
         self.assertEquals(
             self.arquivo.get_leilao_por_identificador(1),
             Leilao(
-                'Laptop', 'Macbook Pro Late 2016', 8000,
+                'Laptop', 'Macbook Pro Late 2016', 8000.00,
                 '25/01/2017 15:45:00', 300, Usuario.yago.nome, 1
             )
         )
         self.assertEquals(
             self.arquivo.get_leilao_por_identificador(2),
             Leilao(
-                'Laptop', 'Macbook Pro Late 2016', 8000,
+                'Laptop', 'Macbook Pro Late 2016', 8000.00,
                 '25/01/2017 15:45:00', 300, Usuario.yago.nome, 2
             )
         )
@@ -125,7 +128,7 @@ class Teste(unittest.TestCase):
             cliente.faz_login(Usuario.yago.nome, Usuario.yago.senha)
             self.assertTrue(
                 cliente.lanca_produto(
-                    'Laptop', 'Macbook Pro Late 2016', 8000,
+                    'Laptop', 'Macbook Pro Late 2016', 8000.00,
                     '25/01/2017 15:45:00', 300
                 )
             )
@@ -142,7 +145,7 @@ class Teste(unittest.TestCase):
             self.assertEquals(
                 self.arquivo.get_leilao_por_identificador(i),
                 Leilao(
-                    'Laptop', 'Macbook Pro Late 2016', 8000,
+                    'Laptop', 'Macbook Pro Late 2016', 8000.00,
                     '25/01/2017 15:45:00', 300, Usuario.yago.nome, i
                 )
             )
@@ -151,16 +154,91 @@ class Teste(unittest.TestCase):
         self.assertEqual(self.cliente.lista_leiloes(), "Listagem")
 
     def test_lista_leiloes_somente_com_leiloes_fechados(self):
-        pass
+        self.arquivo.salva_leilao(Leilao(
+            'Laptop', 'Macbook Pro Late 2016', 8000.00,
+            '25/01/2017 15:45:00', 300, Usuario.yago.nome,
+            finalizado=True
+        ))
+        self.assertEqual(self.cliente.lista_leiloes(), "Listagem")
 
-    def test_lista_leiloes_com_leiloes_fechados_abertos_e_futuros(self):
-        pass
+    def test_lista_leiloes_com_leiloes_fechados_e_abertos(self):
+        self.arquivo.salva_leilao(Leilao(
+            'Nome1', 'Descrição1', 8000.00,
+            '25/01/2017 15:45:00', 300, Usuario.yago.nome,
+            finalizado=True
+        ))
+        leilao_aberto = Leilao(
+            'Nome2', 'Descrição2', 8000.00,
+            '25/01/2017 15:45:00', 300, Usuario.yago.nome,
+            finalizado=False
+        )
+        self.arquivo.salva_leilao(leilao_aberto)
+        self.assertEqual(self.cliente.lista_leiloes(),
+                         "Listagem," + str(leilao_aberto))
 
-    def test_multiple_bids(self):
-        pass
-        # for client_id in range(NUM_OF_CLIENTS):
-        #     t = threading.Thread(target=client.client, args=(client_id,))
-        #     t.start()
+    def test_entrar_leilao_com_usuario_deslogado(self):
+        self.arquivo.salva_leilao(Leilao(
+            'Nome1', 'Descrição1', 8000.00,
+            '25/01/2017 15:45:00', 300, Usuario.yago.nome
+        ))
+        self.assertFalse(self.cliente.entrar_leilao(1))
+
+    def test_entrar_leilao_com_identificador_inexistente(self):
+        self.cliente.adiciona_usuario(Usuario.yago)
+        self.cliente.faz_login(Usuario.yago.nome, Usuario.yago.senha)
+        self.assertFalse(self.cliente.entrar_leilao(1))
+
+    # def test_entrar_leilao_no_qual_ja_entrou(self):
+    #     self.cliente.adiciona_usuario(Usuario.yago)
+    #     self.cliente.faz_login(Usuario.yago.nome, Usuario.yago.senha)
+    #     self.arquivo.salva_leilao(Leilao(
+    #         'Nome1', 'Descrição1', 8000.00,
+    #         '25/01/2017 15:45:00', 300, Usuario.yago.nome
+    #     ))
+    #     self.assertTrue(self.cliente.entrar_leilao(1))
+    #     self.assertTrue(self.cliente.entrar_leilao(1))
+
+    def test_entrar_leilao_finalizado(self):
+        self.cliente.adiciona_usuario(Usuario.yago)
+        self.cliente.faz_login(Usuario.yago.nome, Usuario.yago.senha)
+        self.arquivo.salva_leilao(Leilao(
+            'Nome1', 'Descrição1', 8000.00,
+            '25/01/2017 15:45:00', 300, Usuario.yago.nome,
+            finalizado=True
+        ))
+        self.assertFalse(self.cliente.entrar_leilao(1))
+
+    def test_entrar_leilao_antes_de_30_minutos_ate_o_inicio(self):
+        self.cliente.adiciona_usuario(Usuario.yago)
+        self.cliente.faz_login(Usuario.yago.nome, Usuario.yago.senha)
+        daqui_a_trinta_e_um_minutos = datetime.fromtimestamp(time() + 60 * 31)\
+                                              .strftime(FORMATO_DATAHORA)
+        self.arquivo.salva_leilao(Leilao(
+            'Nome1', 'Descrição1', 8000.00,
+            daqui_a_trinta_e_um_minutos, 300, Usuario.yago.nome
+        ))
+        self.assertFalse(self.cliente.entrar_leilao(1))
+
+    # def test_entrar_leilao_30_minutos_antes_do_inicio(self):
+    #     self.cliente.adiciona_usuario(Usuario.yago)
+    #     self.cliente.faz_login(Usuario.yago.nome, Usuario.yago.senha)
+    #     daqui_a_trinta_minutos = datetime.fromtimestamp(time() + 60 * 30)\
+    #                                      .strftime(FORMATO_DATAHORA)
+    #     self.arquivo.salva_leilao(Leilao(
+    #         'Nome1', 'Descrição1', 8000.00,
+    #         daqui_a_trinta_minutos, 300, Usuario.yago.nome
+    #     ))
+    #     self.assertTrue(self.cliente.entrar_leilao(1))
+    #
+    # def test_entrar_leilao_em_andamento(self):
+    #     self.cliente.adiciona_usuario(Usuario.yago)
+    #     self.cliente.faz_login(Usuario.yago.nome, Usuario.yago.senha)
+    #     agora = datetime.now().strftime(FORMATO_DATAHORA)
+    #     self.arquivo.salva_leilao(Leilao(
+    #         'Nome1', 'Descrição1', 8000.00,
+    #         agora, 300, Usuario.yago.nome
+    #     ))
+    #     self.assertTrue(self.cliente.entrar_leilao(1))
 
     def existe_usuario(self, usuario):
         u = self.arquivo.get_usuario_por_nome(usuario.nome)

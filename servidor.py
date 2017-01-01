@@ -9,7 +9,8 @@ from constantes import (MSG_FAZ_LOGIN,
                         MSG_LISTA_LEILOES,
                         MSG_ADICIONA_USUARIO,
                         MSG_LISTAGEM,
-                        MSG_LANCA_PRODUTO)
+                        MSG_LANCA_PRODUTO,
+                        MSG_ENTRAR_LEILAO)
 
 
 class Servidor:
@@ -64,6 +65,7 @@ class Conexao:
         self.verbose = verbose
         self.logado = False
         self.usuario = None
+        self.leiloes = set([])
         self.log("Iniciando conexão com %s" % str(endereco))
         t = threading.Thread(target=self.lidar_com_cliente)
         t.start()
@@ -85,12 +87,10 @@ class Conexao:
                     self.faz_login(*campos[1:])
                 elif campos[0] == MSG_LISTA_LEILOES:
                     self.lista_leiloes()
-                else:
-                    if self.logado:
-                        if campos[0] == MSG_LANCA_PRODUTO:
-                            self.lanca_produto(*campos[1:])
-                    else:
-                        self.responde_erro()
+                elif campos[0] == MSG_LANCA_PRODUTO:
+                    self.lanca_produto(*campos[1:])
+                elif campos[0] == MSG_ENTRAR_LEILAO:
+                    self.entrar_leilao(*campos[1:])
 
                 mensagem = self.conexao.recv(4096)
         finally:
@@ -109,6 +109,10 @@ class Conexao:
             self.responde_erro()
 
     def faz_login(self, nome, senha):
+        if self.logado:
+            self.responde_erro()
+            return
+
         u = self.arquivo.get_usuario_por_nome(nome)
         if u is not None and u.senha == senha:
             self.logado = True
@@ -119,6 +123,7 @@ class Conexao:
 
     def lista_leiloes(self):
         listagem = self.arquivo.get_listagem_leiloes()
+        listagem = filter(lambda l: not l.finalizado, listagem)
         if listagem:
             listagem_str = ','.join(map(str, listagem))
             self.conexao.sendall(','.join([MSG_LISTAGEM, listagem_str]))
@@ -127,14 +132,30 @@ class Conexao:
 
     def lanca_produto(self, nome, descricao, lance_minimo,
                       datahora_inicio, tempo_max_sem_lances):
+        if not self.logado:
+            self.responde_erro()
+            return
         try:
             novo_leilao = Leilao(
                 nome, descricao, float(lance_minimo),
-                datahora_inicio, tempo_max_sem_lances, self.usuario.nome)
+                datahora_inicio, tempo_max_sem_lances, self.usuario.nome
+            )
             self.arquivo.salva_leilao(novo_leilao)
             self.responde_sucesso()
         except ValueError:
             self.responde_erro()
+
+    def entrar_leilao(self, identificador_leilao):
+        if not self.logado:
+            self.responde_erro()
+            return
+
+        l = self.arquivo.get_leilao_por_identificador(identificador_leilao)
+        if l is None or l.finalizado:
+            self.responde_erro()
+        else:
+            self.leiloes.add(identificador_leilao)
+            self.responde_sucesso()
 
     def responde_erro(self):
         self.conexao.sendall('not_ok')
