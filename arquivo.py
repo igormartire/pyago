@@ -19,12 +19,25 @@ arquivo_leiloes = 'leiloes.txt'
 class Gerenciador:
 
     def __init__(self):
+        self.cria_arquivos_caso_nao_existam()
         self.semaforo_usuarios = threading.Semaphore(1)
         self.semaforo_leiloes = threading.Semaphore(1)
-        # Cria arquivos se não existirem
-        # http://stackoverflow.com/questions/2967194/open-in-python-does-not-create-a-file-if-it-doesnt-exist
+
+    # http://stackoverflow.com/questions/2967194/open-in-python-does-not-create-a-file-if-it-doesnt-exist
+    def cria_arquivos_caso_nao_existam(self):
         open(arquivo_usuarios, 'a+').close()
         open(arquivo_leiloes, 'a+').close()
+
+    # http://stackoverflow.com/questions/4914277/how-to-empty-a-file-using-python
+    def apagar_todos(self):
+        with self.semaforo_usuarios:
+            open(arquivo_usuarios, 'w').close()
+        with self.semaforo_leiloes:
+            open(arquivo_leiloes, 'w').close()
+
+    #########################################
+    #  Funções relacionadas a usuários
+    #########################################
 
     def get_usuario_por_nome(self, nome):
         with self.semaforo_usuarios:
@@ -41,6 +54,10 @@ class Gerenciador:
             with open(arquivo_usuarios, "a") as f:
                 f.write(str(u) + '\n')
 
+    #########################################
+    #  Funções relacionadas a leilões
+    #########################################
+
     def get_leilao_por_identificador(self, identificador):
         with self.semaforo_leiloes:
             with open(arquivo_leiloes, 'r') as f:
@@ -51,7 +68,22 @@ class Gerenciador:
                             return leilao_linha
         return None
 
-    def salva_leilao(self, leilao):
+    def get_listagem_leiloes(self):
+        listagem = []
+        with self.semaforo_leiloes:
+            with open(arquivo_leiloes, 'r') as f:
+                for linha in f:
+                    if linha != '\n':
+                        leilao_linha = Leilao.texto_para_leilao(linha)
+                        listagem.append(leilao_linha)
+        return listagem
+
+    def cria_leilao(self, nome, descricao, lance_minimo,
+                    datahora_inicio, tempo_max_sem_lances, nome_dono):
+        leilao = Leilao(
+            nome, descricao, float(lance_minimo),
+            datahora_inicio, int(tempo_max_sem_lances), nome_dono
+        )
         with self.semaforo_leiloes:
             novo_identificador = None
             with open(arquivo_leiloes, "r") as f:
@@ -64,20 +96,21 @@ class Gerenciador:
             leilao.set_identificador(novo_identificador)
             with open(arquivo_leiloes, "a") as f:
                 f.write(str(leilao) + '\n')
+        self.leiloes[leilao.identificador] = leilao
 
-    def get_listagem_leiloes(self):
-        listagem = []
+    def lance_leilao(self, identificador_leilao, nome_autor, valor):
         with self.semaforo_leiloes:
+            leiloes = []
             with open(arquivo_leiloes, 'r') as f:
                 for linha in f:
                     if linha != '\n':
                         leilao_linha = Leilao.texto_para_leilao(linha)
-                        listagem.append(leilao_linha)
-        return listagem
-
-    # http://stackoverflow.com/questions/4914277/how-to-empty-a-file-using-python
-    def apagar_todos(self):
-        with self.semaforo_usuarios:
-            open(arquivo_usuarios, 'w').close()
-        with self.semaforo_leiloes:
-            open(arquivo_leiloes, 'w').close()
+                        if leilao_linha.identificador == identificador_leilao:
+                            lance_ok = leilao_linha.lance(valor, nome_autor)
+                            if not lance_ok:
+                                return False
+                        leiloes.append(leilao_linha)
+            with open(arquivo_leiloes, 'w') as f:
+                for leilao in leiloes:
+                    f.write(str(leilao) + '\n')
+            return True

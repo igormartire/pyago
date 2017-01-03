@@ -10,7 +10,11 @@ from constantes import (MSG_FAZ_LOGIN,
                         MSG_ADICIONA_USUARIO,
                         MSG_LISTAGEM,
                         MSG_LANCA_PRODUTO,
-                        MSG_ENTRAR_LEILAO)
+                        MSG_ENTRAR_LEILAO,
+                        MSG_ENVIAR_LANCE)
+
+
+semaforo_lance = threading.Semaphore(1)
 
 
 class Servidor:
@@ -91,6 +95,8 @@ class Conexao:
                     self.lanca_produto(*campos[1:])
                 elif campos[0] == MSG_ENTRAR_LEILAO:
                     self.entrar_leilao(*campos[1:])
+                elif campos[0] == MSG_ENVIAR_LANCE:
+                    self.enviar_lance(*campos[1:])
 
                 mensagem = self.conexao.recv(4096)
         finally:
@@ -122,11 +128,11 @@ class Conexao:
             self.responde_erro()
 
     def lista_leiloes(self):
-        listagem = self.arquivo.get_listagem_leiloes()
-        listagem = filter(lambda l: not l.finalizado, listagem)
-        if listagem:
-            listagem_str = ','.join(map(str, listagem))
-            self.conexao.sendall(','.join([MSG_LISTAGEM, listagem_str]))
+        leiloes = self.arquivo.get_listagem_leiloes()
+        leiloes_nao_finalizados = filter(lambda l: not l.finalizado(), leiloes)
+        if leiloes_nao_finalizados:
+            listagem = ','.join(map(str, leiloes_nao_finalizados))
+            self.conexao.sendall(MSG_LISTAGEM + ',' + listagem)
         else:
             self.conexao.sendall(MSG_LISTAGEM)
 
@@ -136,11 +142,10 @@ class Conexao:
             self.responde_erro()
             return
         try:
-            novo_leilao = Leilao(
-                nome, descricao, float(lance_minimo),
-                datahora_inicio, tempo_max_sem_lances, self.usuario.nome
+            self.arquivo.cria_leilao(
+                nome, descricao, lance_minimo, datahora_inicio,
+                tempo_max_sem_lances, self.usuario.nome
             )
-            self.arquivo.salva_leilao(novo_leilao)
             self.responde_sucesso()
         except ValueError:
             self.responde_erro()
@@ -150,12 +155,31 @@ class Conexao:
             self.responde_erro()
             return
 
-        l = self.arquivo.get_leilao_por_identificador(identificador_leilao)
-        if l is None or l.finalizado:
+        id_leilao = int(identificador_leilao)
+        l = self.arquivo.get_leilao_por_identificador(id_leilao)
+        if l is None or not l.entrada_permitida():
             self.responde_erro()
         else:
             self.leiloes.add(identificador_leilao)
             self.responde_sucesso()
+
+    def enviar_lance(self, identificador_leilao, valor):
+        if not self.logado:
+            self.responde_erro()
+            return
+
+        with semaforo_lance:
+            id_leilao = int(identificador_leilao)
+            if id_leilao not in self.leiloes:
+                self.return_erro()
+            else:
+                ok = self.arquivo.lance(
+                    id_leilao, float(valor), self.usuario.nome
+                )
+                if ok:
+                    self.responde_sucesso()
+                else:
+                    self.responde_erro()
 
     def responde_erro(self):
         self.conexao.sendall('not_ok')
