@@ -2,7 +2,7 @@
 
 """
  Arquivo que agrupa todas as funções de manipulação dos arquivos
- necessários ao servidor.
+ necessárias ao servidor.
 
  A implementação é thread-safe, isto é, foi feita pensando em
  suportar o uso simultâneo por diversas threads.
@@ -20,6 +20,15 @@ class Gerenciador:
 
     def __init__(self):
         self.cria_arquivos_caso_nao_existam()
+        # Jusitificativa do uso de semáforos: estes dois semáforos são
+        # responsáveis por proteger os arquivos que guardam os usuários e os
+        # leilões. Como são arquivos compartilhados por diversas threads (as
+        # threads que lidam com os diversos clientes), há necessidade do uso
+        # de semáforos para garantir que duas threads não estejam acessando
+        # o mesmo arquivo ao mesmo tempo. Assim, sempre antes de usar os
+        # arquivos para leitura e/ou escrita nós usamos o semáforo para
+        # para adquirirmos o lock sobre o arquivo e assim garantir que só
+        # uma thread por vez tem acesso ao arquivo.
         self.semaforo_usuarios = threading.Semaphore(1)
         self.semaforo_leiloes = threading.Semaphore(1)
 

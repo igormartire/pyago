@@ -41,6 +41,22 @@ class Cliente:
                     limpar_tela()
                     self.imprime_informacao_leiloes()
                     time.sleep(1)
+        # Jusitificativa do uso de thread: sem esta thread seria muito mais
+        # complexo permitir ao usuário parar o loop apertando a tecla ENTER.
+        # Isto porque precisaríamos de uma captura de pressionamento de tecla
+        # pelo usuário que seja assíncrona, isto é, que não bloqueie a execução
+        # da thread principal. Poderíamos usar select.select() no stdin, mas
+        # infelizmente isso não funcionaria no Windows. Assim sendo, soluções
+        # assíncronas multi-plataformas são descritas em:
+        # http://stackoverflow.com/questions/13207678/whats-the-simplest-way-of-detecting-keyboard-input-in-python-from-the-terminal
+        # Contudo, por serem muito complexas, resolvemos optar por essa
+        # abordagem mais simples que faz o uso de Threads, como sugerido em:
+        # http://stackoverflow.com/questions/292095/polling-the-keyboard-detect-a-keypress-in-python
+        # Assim, essa nova thread é responsável por imprimir na tela as
+        # informações mais recentes de cada leilão a cada segundo, enquanto
+        # a thread principal utiliza um simples comando raw_input aguardando
+        # o pressionamento da tecla ENTER para então setar self.acompanhando
+        # para False e assim fazer com que a Thread pare de imprimir na tela.
         threading.Thread(target=loop).start()
 
     def adiciona_usuario(self, usuario):
@@ -175,8 +191,8 @@ class Cliente:
 
 
 def main():
-    ip = "localhost"
-    porta = 8888
+    ip = raw_input('Entre com o IP do servidor: ')
+    porta = int(raw_input('Entre com a porta do servidor: '))
 
     cliente = Cliente(ip, porta, 5)
     print '\nSeja Bem-vindo!'

@@ -35,6 +35,20 @@ class Servidor:
         self.socket_escuta.listen(5)
         self.arquivo = arquivo.Gerenciador()
         self.rodando = True
+        # Jusitificativa do uso de thread: de forma similar à thread usada
+        # na classe Cliente, esta thread foi aqui utilizada para permitir
+        # a captura da tecla ENTER pelo usuário para finalizar o servidor.
+        # Ao capturar a intenção de finalizar o servidor, podemos finalizar
+        # todas as conexões e threads corretamente, ao invés de causar
+        # mal uso da memória e precisar matar o processo através de linha
+        # de comando, pois o processo estaria com várias threads em execução
+        # que estariam impedindo o processo de ser concluído. Assim, colocamos
+        # a tarefa de escutar "infinitamente" por novas conexões nessa nova
+        # thread. "infinitamente" entre aspas porque se analisarmos o código
+        # do método escuta(), podemos perceber que o while é condicionado no
+        # valor de self.rodando, que só será False quanto o processo estiver
+        # sendo finalizado devido a uma ação do usuário (pressionamento da
+        # tecla ENTER por exemplo).
         self.thread_escuta = threading.Thread(target=self.escuta)
         self.thread_escuta.start()
         self.log('Esperando por novas conexões na porta %s ...' % porta)
@@ -74,6 +88,14 @@ class Conexao:
         self.logado = False
         self.nome_usuario = None
         self.log("Iniciando conexão com %s" % str(endereco))
+        # Jusitificativa do uso de thread: antes de criarmos essa nova thread
+        # este código está sendo executado na mesma thread que é responsável
+        # por escutar por novas conexões. Para que a thread possa então voltar
+        # à sua incansável tarefa de aceitar novas conexões, precisamos
+        # liberá-la do restante desta tarefa de lidar com o cliente. Assim,
+        # passamos esta tarefa para uma nova thread. Dessa forma, temos uma
+        # thread dedicada para cada cliente e uma única thread responsável
+        # por escutar e aceitar novas conexões.
         t = threading.Thread(target=self.lidar_com_cliente)
         t.start()
 
