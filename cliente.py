@@ -109,10 +109,17 @@ class Cliente:
                 campos = mensagem.split(',')
 
                 if campos[0] == MSG_FIM_LEILAO:
-                    print (
-                        'Fim do leilão: %s. Valor de venda: %s. Comprador: %s.'
-                        % (campos[1], campos[2], campos[3])
-                    )
+                    if campos[3] == 'Aguardando o envio':
+                        print (
+                            'Fim do leilão: %s. Valor de venda: %s. '
+                            'Comprador: N/A.' % (campos[1], campos[2])
+                        )
+                    else:
+                        print (
+                            'Fim do leilão: %s. Valor de venda: %s. '
+                            'Comprador: %s.'
+                            % (campos[1], campos[2], campos[3])
+                        )
                 elif campos[0] == MSG_CONTATO_VENDEDOR:
                     print (
                         'Leilão: %s. Valor de venda: %s.\n'
@@ -138,10 +145,10 @@ class Cliente:
                 elif campos[0] == MSG_LANCE:
                     print (
                         'Leilão: %s. Nome do autor do lance: %s. '
-                        'Lance atual: %s. Número de lances: %s. '
-                        'Tempo restante: %s'
+                        'Lance atual: %s. Número de usuários: %s '
+                        'Número de lances: %s. Tempo restante: %s'
                         % (campos[1], campos[2], campos[3],
-                           campos[4], campos[5])
+                           campos[4], campos[5], campos[6])
                     )
                 print ''
         print '--------------------------------------'
@@ -189,12 +196,15 @@ def main():
                     endereco = raw_input('Entre com o endereço: ')
                     email = raw_input('Entre com o email: ')
                     senha = raw_input('Entre com a senha: ')
-                    u = Usuario(nome, telefone, endereco, email, senha)
-                    ok = cliente.adiciona_usuario(u)
-                    if ok:
-                        print '\nUsuário criado com sucesso!'
+                    if nome == '':
+                        print '\nO nome não pode ser vazio!'
                     else:
-                        print '\nFalha na criação do usuário!'
+                        u = Usuario(nome, telefone, endereco, email, senha)
+                        ok = cliente.adiciona_usuario(u)
+                        if ok:
+                            print '\nUsuário criado com sucesso!'
+                        else:
+                            print '\nFalha na criação do usuário!'
                 elif opcao == '2':
                     nome = raw_input('\nEntre com o nome: ')
                     senha = raw_input('Entre com a senha: ')
@@ -210,7 +220,9 @@ def main():
                     cliente.fechar()
                     return
                 else:
-                    print '\nOpção inválida. Digite o número de uma das opções acima'
+                    print (
+                        '\nOpção inválida. '
+                        'Digite o número de uma das opções acima')
             else:
                 print '\nEscolha uma das opções:'
                 print '\t1- Listar leilões'
@@ -267,7 +279,8 @@ def main():
                         print '\nFalha no aceite do lance!'
                 elif opcao == '6':
                     cliente.acompanhando = True
-                    raw_input('\nPressione [ENTER] para parar de acompanhar.\n\n')
+                    raw_input(
+                        '\nPressione [ENTER] para parar de acompanhar.\n\n')
                     cliente.acompanhando = False
                 elif opcao == '7':
                     senha = raw_input('\nEntre com sua senha: ')
@@ -285,7 +298,9 @@ def main():
                     else:
                         print '\nFalha ao tentar deslogar!'
                 else:
-                    print '\nOpção inválida. Digite o número de uma das opções acima'
+                    print (
+                        '\nOpção inválida. '
+                        'Digite o número de uma das opções acima')
     finally:
         cliente.fechar()
 
@@ -313,6 +328,7 @@ def lista_leiloes(cliente):
                  leilao.nome_dono)
             )
         print '--------------------------------\n'
+
 
 # http://stackoverflow.com/questions/1325581/how-do-i-check-if-im-running-on-windows-in-python
 def limpar_tela():

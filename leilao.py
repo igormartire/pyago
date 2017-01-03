@@ -9,8 +9,8 @@ class Leilao:
 
     def __init__(self, nome, descricao, lance_minimo,
                  datahora_inicio, tempo_max_sem_lances, nome_dono,
-                 identificador=0, numero_de_lances=0, lance_atual=0,
-                 nome_autor_do_lance="Aguardando o envio",
+                 identificador=0, numero_usuarios=0, numero_de_lances=0,
+                 lance_atual=0, nome_autor_do_lance="Aguardando o envio",
                  datahora_ultimo_lance=''):
         if nome == '':
             raise ValueError
@@ -22,6 +22,7 @@ class Leilao:
                                                  FORMATO_DATAHORA)
         self.tempo_max_sem_lances = tempo_max_sem_lances
         self.nome_dono = nome_dono
+        self.numero_usuarios = numero_usuarios
         self.numero_de_lances = numero_de_lances
         self.lance_atual = lance_atual if lance_atual else lance_minimo
         self.nome_autor_do_lance = nome_autor_do_lance
@@ -36,16 +37,16 @@ class Leilao:
     def clone(self):
         return Leilao(self.nome, self.descricao, self.lance_minimo,
                       self.datahora_inicio, self.tempo_max_sem_lances,
-                      self.nome_dono, self.identificador,
+                      self.nome_dono, self.identificador, self.numero_usuarios,
                       self.numero_de_lances, self.lance_atual,
                       self.nome_autor_do_lance, self.datahora_ultimo_lance)
 
     def __str__(self):
-        return "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s" % \
+        return "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s" % \
           (self.identificador, self.nome, self.descricao, self.lance_minimo,
            self.datahora_inicio.strftime(FORMATO_DATAHORA),
-           self.tempo_max_sem_lances, self.nome_dono, self.numero_de_lances,
-           self.lance_atual, self.nome_autor_do_lance,
+           self.tempo_max_sem_lances, self.nome_dono, self.numero_usuarios,
+           self.numero_de_lances, self.lance_atual, self.nome_autor_do_lance,
            self.datahora_ultimo_lance.strftime(FORMATO_DATAHORA))
 
     def __eq__(self, other):
@@ -57,6 +58,7 @@ class Leilao:
                 self.datahora_inicio == other.datahora_inicio and \
                 self.tempo_max_sem_lances == other.tempo_max_sem_lances and \
                 self.nome_dono == other.nome_dono and \
+                self.numero_usuarios == other.numero_usuarios and \
                 self.numero_de_lances == other.numero_de_lances and \
                 self.lance_atual == other.lance_atual and \
                 self.nome_autor_do_lance == other.nome_autor_do_lance and\
@@ -107,7 +109,7 @@ class Leilao:
             identificador=int(campos[0]), nome=campos[1],
             descricao=campos[2], lance_minimo=float(campos[3]),
             datahora_inicio=campos[4], tempo_max_sem_lances=int(campos[5]),
-            nome_dono=campos[6], numero_de_lances=int(campos[7]),
-            lance_atual=float(campos[8]), nome_autor_do_lance=campos[9],
-            datahora_ultimo_lance=campos[10]
+            nome_dono=campos[6], numero_usuarios=int(campos[7]),
+            numero_de_lances=int(campos[8]), lance_atual=float(campos[9]),
+            nome_autor_do_lance=campos[10], datahora_ultimo_lance=campos[11]
         )

@@ -49,6 +49,16 @@ class Gerenciador:
                             return usuario_linha
         return None
 
+    def get_ids_leiloes_dos_quais_o_usuario_participa(self, nome_usuario):
+        with self.semaforo_usuarios:
+            with open(arquivo_usuarios, 'r') as f:
+                for linha in f:
+                    if linha != '\n':
+                        usuario_linha = Usuario.texto_para_usuario(linha)
+                        if usuario_linha.nome == nome_usuario:
+                            return usuario_linha.ids_leiloes_participando
+        return None
+
     def salva_usuario(self, u):
         with self.semaforo_usuarios:
             with open(arquivo_usuarios, "a") as f:
@@ -126,6 +136,82 @@ class Gerenciador:
                             if not lance_ok:
                                 return False
                         leiloes.append(leilao_linha)
+            with open(arquivo_leiloes, 'w') as f:
+                for leilao in leiloes:
+                    f.write(str(leilao) + '\n')
+            return True
+
+    #########################################
+    #  Funções relacionadas a usuários e leilões simultaneamente
+    #########################################
+
+    def entrar_leilao(self, nome_usuario, identificador_leilao):
+        with self.semaforo_usuarios, self.semaforo_leiloes:
+            usuarios = []
+            with open(arquivo_usuarios, 'r') as f:
+                for linha in f:
+                    if linha != '\n':
+                        usuario_linha = Usuario.texto_para_usuario(linha)
+                        if usuario_linha.nome == nome_usuario:
+                            if identificador_leilao in \
+                               usuario_linha.ids_leiloes_participando:
+                                return True
+                            usuario_linha.ids_leiloes_participando\
+                                         .add(identificador_leilao)
+                        usuarios.append(usuario_linha)
+            achou = False
+            leiloes = []
+            with open(arquivo_leiloes, 'r') as f:
+                for linha in f:
+                    if linha != '\n':
+                        leilao_linha = Leilao.texto_para_leilao(linha)
+                        if leilao_linha.identificador == identificador_leilao:
+                            achou = True
+                            if not leilao_linha.entrada_permitida():
+                                return False
+                            else:
+                                leilao_linha.numero_usuarios += 1
+                        leiloes.append(leilao_linha)
+            if not achou:
+                return False
+            with open(arquivo_usuarios, 'w') as f:
+                for usuario in usuarios:
+                    f.write(str(usuario) + '\n')
+            with open(arquivo_leiloes, 'w') as f:
+                for leilao in leiloes:
+                    f.write(str(leilao) + '\n')
+            return True
+
+    def sair_leilao(self, nome_usuario, identificador_leilao):
+        with self.semaforo_usuarios, self.semaforo_leiloes:
+            usuarios = []
+            with open(arquivo_usuarios, 'r') as f:
+                for linha in f:
+                    if linha != '\n':
+                        usuario_linha = Usuario.texto_para_usuario(linha)
+                        if usuario_linha.nome == nome_usuario:
+                            if identificador_leilao not in \
+                               usuario_linha.ids_leiloes_participando:
+                                return False
+                            else:
+                                usuario_linha.ids_leiloes_participando \
+                                             .remove(identificador_leilao)
+                        usuarios.append(usuario_linha)
+            achou = False
+            leiloes = []
+            with open(arquivo_leiloes, 'r') as f:
+                for linha in f:
+                    if linha != '\n':
+                        leilao_linha = Leilao.texto_para_leilao(linha)
+                        if leilao_linha.identificador == identificador_leilao:
+                            achou = True
+                            leilao_linha.numero_usuarios -= 1
+                        leiloes.append(leilao_linha)
+            if not achou:
+                return False
+            with open(arquivo_usuarios, 'w') as f:
+                for usuario in usuarios:
+                    f.write(str(usuario) + '\n')
             with open(arquivo_leiloes, 'w') as f:
                 for leilao in leiloes:
                     f.write(str(leilao) + '\n')
