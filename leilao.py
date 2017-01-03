@@ -93,6 +93,13 @@ class Leilao:
                 return True
         return False
 
+    def tempo_restante(self):
+        agora = datetime.now()
+        if agora < self.datahora_inicio:
+            return "não iniciado"
+        tempo_sem_lances = agora - self.datahora_ultimo_lance
+        return max(self.tempo_max_sem_lances - tempo_sem_lances.seconds, 0)
+
     @staticmethod
     def texto_para_leilao(texto):
         campos = texto.rstrip().split(',')

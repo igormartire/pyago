@@ -3,7 +3,6 @@
 import socket
 import threading
 from usuario import Usuario
-from leilao import Leilao
 import arquivo
 from constantes import (MSG_FAZ_LOGIN,
                         MSG_LISTA_LEILOES,
@@ -11,10 +10,15 @@ from constantes import (MSG_FAZ_LOGIN,
                         MSG_LISTAGEM,
                         MSG_LANCA_PRODUTO,
                         MSG_ENTRAR_LEILAO,
-                        MSG_ENVIAR_LANCE)
-
-
-semaforo_lance = threading.Semaphore(1)
+                        MSG_ENVIAR_LANCE,
+                        MSG_SAIR,
+                        MSG_INFORMACAO_LEILOES,
+                        MSG_FIM_LEILAO,
+                        MSG_CONTATO_VENDEDOR,
+                        MSG_CONTATO_CLIENTE,
+                        MSG_LANCE,
+                        MSG_APAGA_USUARIO,
+                        MSG_SAIR_LEILAO)
 
 
 class Servidor:
@@ -87,6 +91,8 @@ class Conexao:
 
                 if campos[0] == MSG_ADICIONA_USUARIO:
                     self.adiciona_usuario(*campos[1:])
+                elif campos[0] == MSG_APAGA_USUARIO:
+                    self.apaga_usuario(*campos[1:])
                 elif campos[0] == MSG_FAZ_LOGIN:
                     self.faz_login(*campos[1:])
                 elif campos[0] == MSG_LISTA_LEILOES:
@@ -95,8 +101,14 @@ class Conexao:
                     self.lanca_produto(*campos[1:])
                 elif campos[0] == MSG_ENTRAR_LEILAO:
                     self.entrar_leilao(*campos[1:])
+                elif campos[0] == MSG_SAIR_LEILAO:
+                    self.sair_leilao(*campos[1:])
                 elif campos[0] == MSG_ENVIAR_LANCE:
                     self.enviar_lance(*campos[1:])
+                elif campos[0] == MSG_INFORMACAO_LEILOES:
+                    self.informacao_leiloes()
+                elif campos[0] == MSG_SAIR:
+                    self.sair()
 
                 mensagem = self.conexao.recv(4096)
         finally:
@@ -112,6 +124,21 @@ class Conexao:
                 self.arquivo.salva_usuario(new_u)
                 self.responde_sucesso()
         except ValueError:
+            self.responde_erro()
+
+    def apaga_usuario(self, nome, senha):
+        if not self.logado:
+            self.responde_erro()
+            return
+
+        if nome != self.usuario.nome:
+            self.responde_erro()
+            return
+
+        ok = self.arquivo.apaga_usuario(nome, senha)
+        if ok:
+            self.sair()
+        else:
             self.responde_erro()
 
     def faz_login(self, nome, senha):
@@ -131,8 +158,8 @@ class Conexao:
         leiloes = self.arquivo.get_listagem_leiloes()
         leiloes_nao_finalizados = filter(lambda l: not l.finalizado(), leiloes)
         if leiloes_nao_finalizados:
-            listagem = ','.join(map(str, leiloes_nao_finalizados))
-            self.conexao.sendall(MSG_LISTAGEM + ',' + listagem)
+            listagem = ';'.join(map(str, leiloes_nao_finalizados))
+            self.conexao.sendall(MSG_LISTAGEM + ';' + listagem)
         else:
             self.conexao.sendall(MSG_LISTAGEM)
 
@@ -147,7 +174,8 @@ class Conexao:
                 tempo_max_sem_lances, self.usuario.nome
             )
             self.responde_sucesso()
-        except ValueError:
+        except ValueError as e:
+            print e
             self.responde_erro()
 
     def entrar_leilao(self, identificador_leilao):
@@ -160,26 +188,92 @@ class Conexao:
         if l is None or not l.entrada_permitida():
             self.responde_erro()
         else:
-            self.leiloes.add(identificador_leilao)
+            self.leiloes.add(id_leilao)
             self.responde_sucesso()
+
+    def sair_leilao(self, identificador_leilao):
+        if not self.logado:
+            self.responde_erro()
+            return
+
+        id_leilao = int(identificador_leilao)
+        if id_leilao in self.leiloes:
+            self.leiloes.remove(id_leilao)
+            self.responde_sucesso()
+        else:
+            self.responde_erro()
 
     def enviar_lance(self, identificador_leilao, valor):
         if not self.logado:
             self.responde_erro()
             return
 
-        with semaforo_lance:
-            id_leilao = int(identificador_leilao)
-            if id_leilao not in self.leiloes:
-                self.return_erro()
+        id_leilao = int(identificador_leilao)
+        if id_leilao not in self.leiloes:
+            self.responde_erro()
+        else:
+            ok = self.arquivo.lance_leilao(
+                id_leilao, float(valor), self.usuario.nome
+            )
+            if ok:
+                self.responde_sucesso()
             else:
-                ok = self.arquivo.lance(
-                    id_leilao, float(valor), self.usuario.nome
-                )
-                if ok:
-                    self.responde_sucesso()
-                else:
-                    self.responde_erro()
+                self.responde_erro()
+
+    def informacao_leiloes(self):
+        if not self.logado:
+            self.responde_erro()
+            return
+
+        leiloes = self.arquivo.get_listagem_leiloes()
+        leiloes_usuario = filter(
+            lambda l: l.identificador in self.leiloes, leiloes)
+
+        if len(leiloes_usuario) == 0:
+            self.responde_erro()
+
+        mensagens = []
+        for leilao in leiloes_usuario:
+            if leilao.finalizado():
+                mensagens.append(','.join([
+                    MSG_FIM_LEILAO, str(leilao.identificador),
+                    str(leilao.lance_atual), leilao.nome_autor_do_lance
+                ]))
+                if self.usuario.nome == leilao.nome_dono:
+                    comprador = self.arquivo.get_usuario_por_nome(
+                        leilao.nome_autor_do_lance)
+                    if comprador is not None:
+                        mensagens.append(','.join([
+                            MSG_CONTATO_CLIENTE, str(leilao.identificador),
+                            str(leilao.lance_atual), comprador.nome,
+                            comprador.endereco, comprador.telefone,
+                            comprador.email
+                        ]))
+                if self.usuario.nome == leilao.nome_autor_do_lance:
+                    vendedor = self.arquivo.get_usuario_por_nome(
+                        leilao.nome_dono)
+                    if vendedor is not None:
+                        mensagens.append(','.join([
+                            MSG_CONTATO_VENDEDOR, str(leilao.identificador),
+                            str(leilao.lance_atual), vendedor.nome,
+                            vendedor.endereco, vendedor.telefone,
+                            vendedor.email
+                        ]))
+            else:
+                mensagens.append(','.join([
+                    MSG_LANCE, str(leilao.identificador),
+                    leilao.nome_autor_do_lance, str(leilao.lance_atual),
+                    str(leilao.numero_de_lances), str(leilao.tempo_restante())
+                ]))
+        self.conexao.sendall(';'.join(mensagens))
+
+    def sair(self):
+        if self.logado:
+            self.logado = False
+            self.usuario = None
+            self.responde_sucesso()
+        else:
+            self.responde_erro()
 
     def responde_erro(self):
         self.conexao.sendall('not_ok')
