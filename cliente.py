@@ -19,7 +19,9 @@ from constantes import (MSG_FAZ_LOGIN,
                         MSG_CONTATO_CLIENTE,
                         MSG_LANCE,
                         MSG_APAGA_USUARIO,
-                        MSG_SAIR_LEILAO)
+                        MSG_SAIR_LEILAO,
+                        MSG_OK,
+                        MSG_NOT_OK)
 
 
 class Cliente:
@@ -60,20 +62,23 @@ class Cliente:
         threading.Thread(target=loop).start()
 
     def adiciona_usuario(self, usuario):
+        # Envia a mensagem "Adiciona_usuario"
         self.envia_mensagem(MSG_ADICIONA_USUARIO,
                             usuario.nome, usuario.telefone,
                             usuario.endereco, usuario.email, usuario.senha)
-        return self.recebe_resposta() == 'ok'
+        return self.recebe_resposta() == MSG_OK
 
     def apaga_usuario(self, senha):
         if not self.logado:
             return False
+        # Envia a mensagem "Apaga_usuario"
         self.envia_mensagem(MSG_APAGA_USUARIO, self.nome_usuario, senha)
-        return self.recebe_resposta() == 'ok'
+        return self.recebe_resposta() == MSG_OK
 
     def faz_login(self, nome, senha):
+        # Envia a mensagem "Faz_login"
         self.envia_mensagem(MSG_FAZ_LOGIN, nome, senha)
-        if self.recebe_resposta() == 'ok':
+        if self.recebe_resposta() == MSG_OK:
             self.logado = True
             self.nome_usuario = nome
             return True
@@ -81,10 +86,17 @@ class Cliente:
             return False
 
     def lista_leiloes(self):
+        # Envia a mensagem "Lista_leiloes"
         self.envia_mensagem(MSG_LISTA_LEILOES)
         resposta = self.recebe_resposta()
+        # ';' separam leiloes. Os campos dos leiloes são separados por ','
+        # A separação feita dessa forma facilita o processamento em comparação
+        # com o caso onde ',' seriam usadas tanto para separar os campos de um
+        # leilão como também para separar os leilões entre si.
         campos = resposta.split(';')
         listagem = []
+        # A resposta sempre contém 1 campo: o cabeçalho Listagem. Se tiver
+        # mais de 1, significa que veio informações de pelo menos 1 leilão.
         if len(campos) > 1:
             leiloes_texto = campos[1:]
             num_leiloes = len(leiloes_texto)
@@ -95,35 +107,62 @@ class Cliente:
 
     def lanca_produto(self, nome, descricao, lance_minimo,
                       datahora_inicio, tempo_max_sem_lances):
+        # Envia a mensagem "Lanca_produto"
         self.envia_mensagem(MSG_LANCA_PRODUTO, nome, descricao,
                             lance_minimo, datahora_inicio,
                             tempo_max_sem_lances)
-        return self.recebe_resposta() == 'ok'
+        return self.recebe_resposta() == MSG_OK
 
     def entrar_leilao(self, identificador_leilao):
+        # Envia a mensagem "Entrar_leilao"
         self.envia_mensagem(MSG_ENTRAR_LEILAO, identificador_leilao)
-        return self.recebe_resposta() == 'ok'
+        return self.recebe_resposta() == MSG_OK
 
     def sair_leilao(self, identificador_leilao):
+        # Envia a mensagem "Sair_leilao"
         self.envia_mensagem(MSG_SAIR_LEILAO, identificador_leilao)
-        return self.recebe_resposta() == 'ok'
+        return self.recebe_resposta() == MSG_OK
 
     def enviar_lance(self, identificador_leilao, valor):
+        # Envia a mensagem "Enviar_lance"
         self.envia_mensagem(MSG_ENVIAR_LANCE, identificador_leilao, valor)
-        return self.recebe_resposta() == 'ok'
+        return self.recebe_resposta() == MSG_OK
 
     def imprime_informacao_leiloes(self):
+        # Envia a mensagem "Informacao_leiloes"
+        # Esta mensagem foi adicionada por nós para facilitar a implementação.
+        # Seria muito complexo receber informações do servidor a cada 1 segundo
+        # e imprimir imediatamente na tela sem que isso atrapalhasse o uso
+        # da interface pelo usuário quando ele quisesse, por exemplo, fazer um
+        # lance. No momento em que o usuário estivesse digitando as informações
+        # para seu lance, o cliente receberia informações do servidor e as
+        # imprimiria imediatamente, interferindo com a interface do usuário.
+        # Assim, optamos por fazer com que o cliente peça as informações ao
+        # servidor. Assim, ele pode fazer num momento em que esteja preparado
+        # para tal. A resposta a essa mensagem são todas as informações mais
+        # recentes sobre os leilões nos quais esse usuário participa. Essas
+        # informações são impressas em tela, o que não atrapalha o usuário de
+        # interagir com sua interface, pois esta está desabilitada até que o
+        # usuário tecle ENTER, o que significa que o usuário deseja interagir
+        # e portanto tais informações devem parar de serem impressas para que
+        # o usuário possa utilizar a interface sem problemas.
         self.envia_mensagem(MSG_INFORMACAO_LEILOES)
         print '----------- Acompanhemento -----------\n'
         resposta = self.recebe_resposta()
-        if resposta == 'not_ok':
+        if resposta == MSG_NOT_OK:
             print 'Você não está participando de nenhum leilão.\n'
             self.acompanhando = False
         else:
+            # Assim como na mensagem de Lista_leiloes, onde recebíamos uma
+            # lista de leilões, aqui recebemos uma lista de mensagens e
+            # novamente usamos o separador ';' para facilitar a separação das
+            # diferentes mensangens. Novamente cada mensagem tem seus campos
+            # separados por vírgulas.
             mensagens = resposta.split(';')
             for mensagem in mensagens:
                 campos = mensagem.split(',')
 
+                # Recebe a mensagem "Fim_leilao"
                 if campos[0] == MSG_FIM_LEILAO:
                     if campos[3] == 'Aguardando o envio':
                         print (
@@ -136,6 +175,7 @@ class Cliente:
                             'Comprador: %s.'
                             % (campos[1], campos[2], campos[3])
                         )
+                # Recebe a mensagem "Contato_vendedor"
                 elif campos[0] == MSG_CONTATO_VENDEDOR:
                     print (
                         'Leilão: %s. Valor de venda: %s.\n'
@@ -147,6 +187,7 @@ class Cliente:
                         % (campos[1], campos[2], campos[3],
                            campos[4], campos[5], campos[6])
                     )
+                # Recebe a mensagem "Contato_cliente"
                 elif campos[0] == MSG_CONTATO_CLIENTE:
                     print (
                         'Leilão: %s. Valor de venda: %s.\n'
@@ -158,6 +199,12 @@ class Cliente:
                         % (campos[1], campos[2], campos[3],
                            campos[4], campos[5], campos[6])
                     )
+                # Recebe a mensagem "Lance"
+                # Adicionamos um novo campo na mensagem Lance que julgamos
+                # interessante. Trata-se do tempo restante em segundos até
+                # que o leilão seja finalizado caso não hajam mais lances.
+                # Com essa informação o usuário sabe em tempo real o quanto
+                # de tempo tem para decidir em dar uma lance ou não.
                 elif campos[0] == MSG_LANCE:
                     print (
                         'Leilão: %s. Nome do autor do lance: %s. '
@@ -173,12 +220,15 @@ class Cliente:
     def envia_mensagem(self, *campos):
         self.socket.sendall(','.join(map(str, campos)))
 
+    # O tamanho de 32768 é arbitrário e foi utilizado somente para garantir
+    # que nenhuma parte de nenhuma mensagem será perdida. Julgamos que não
+    # haverão mensagens tão grandes como as de tamanho 32768.
     def recebe_resposta(self, tamanho=32768):
         return self.socket.recv(tamanho)
 
     def sair(self):
         self.envia_mensagem(MSG_SAIR)
-        if self.recebe_resposta() == 'ok':
+        if self.recebe_resposta() == MSG_OK:
             self.logado = False
             self.nome_usuario = None
             return True
@@ -191,10 +241,16 @@ class Cliente:
 
 
 def main():
+    # Aqui a interface do cliente pergunta ao usuário qual o IP e porta
+    # do servidor.
     ip = raw_input('Entre com o IP do servidor: ')
     porta = int(raw_input('Entre com a porta do servidor: '))
 
-    cliente = Cliente(ip, porta, 5)
+    # Aqui usamos um timeout de 5 segundos só para garantir de que se houver
+    # algum problema de conexão, o processo não fique parado para sempre
+    # esperando uma resposta do servidor. Com esse timeout, o cliente espera
+    # por uma resposta no máximo por 5 segundos.
+    cliente = Cliente(ip, porta, timeout=5)
     print '\nSeja Bem-vindo!'
 
     try:
@@ -346,6 +402,7 @@ def lista_leiloes(cliente):
         print '--------------------------------\n'
 
 
+# http://stackoverflow.com/a/23516888
 # http://stackoverflow.com/questions/1325581/how-do-i-check-if-im-running-on-windows-in-python
 def limpar_tela():
     if os.name == 'nt':

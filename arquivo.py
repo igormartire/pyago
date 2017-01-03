@@ -75,16 +75,20 @@ class Gerenciador:
 
     def apaga_usuario(self, nome, senha):
         with self.semaforo_usuarios:
+            achou = False
             usuarios = []
             with open(arquivo_usuarios, 'r') as f:
                 for linha in f:
                     if linha != '\n':
                         usuario_linha = Usuario.texto_para_usuario(linha)
                         if usuario_linha.nome == nome:
+                            achou = True
                             if senha != usuario_linha.senha:
                                 return False
                         else:
                             usuarios.append(usuario_linha)
+            if not achou:
+                return False
             with open(arquivo_usuarios, 'w') as f:
                 for usuario in usuarios:
                     f.write(str(usuario) + '\n')
@@ -114,6 +118,7 @@ class Gerenciador:
                         listagem.append(leilao_linha)
         return listagem
 
+    # Salva o leilão no arquivo e associa ao mesmo um identificador único
     def cria_leilao(self, nome, descricao, lance_minimo,
                     datahora_inicio, tempo_max_sem_lances, nome_dono):
         leilao = Leilao(
@@ -154,6 +159,9 @@ class Gerenciador:
     #  Funções relacionadas a usuários e leilões simultaneamente
     #########################################
 
+    # Ingressa o usuario no leilão, incrementando o contador de usuários
+    # participantes do leilão e adicionando o leilão na lista de leilões
+    # que o usuário participa
     def entrar_leilao(self, nome_usuario, identificador_leilao):
         with self.semaforo_usuarios, self.semaforo_leiloes:
             usuarios = []
@@ -191,6 +199,9 @@ class Gerenciador:
                     f.write(str(leilao) + '\n')
             return True
 
+    # Retira o usuario do leilão, decrementando o contador de usuários
+    # participantes do leilão e removendo o leilão da lista de leilões
+    # que o usuário participa
     def sair_leilao(self, nome_usuario, identificador_leilao):
         with self.semaforo_usuarios, self.semaforo_leiloes:
             usuarios = []

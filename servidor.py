@@ -18,12 +18,17 @@ from constantes import (MSG_FAZ_LOGIN,
                         MSG_CONTATO_CLIENTE,
                         MSG_LANCE,
                         MSG_APAGA_USUARIO,
-                        MSG_SAIR_LEILAO)
+                        MSG_SAIR_LEILAO,
+                        MSG_OK,
+                        MSG_NOT_OK)
 
 
 class Servidor:
 
     def __init__(self, host='localhost', porta=8888, verbose=False):
+        # Verbose=True fará com que o servidor imprima na tela mensagens
+        # que explicam o que está acontecendo agora, como status do servidor,
+        # mensagens recebidas dos clientes, erros.
         self.verbose = verbose
         self.log('Iniciando...')
         self.host = host
@@ -57,15 +62,27 @@ class Servidor:
         while self.rodando:
             conexao, endereco = self.socket_escuta.accept()
             if self.rodando:
+                # Note que é sempre o mesmo self.arquivo que é passado
+                # para todas as conexões. Isso faz com que todas as conexões
+                # compartilhem os mesmos semáforos do self.arquivo, evitando
+                # assim que umas interfiram nas outras.
                 Conexao(conexao, endereco, self.arquivo, self.verbose)
 
     def parar(self):
         self.log("Encerrando...")
         self.rodando = False
+        # Esse cliente_falso é necessário, pois a thread de escuta de novas
+        # conexões está bloqueada no método accept(), que só será desbloqueada
+        # depois que uma conexão for aceita. Assim, criamos essa simples
+        # conexão somente para desbloquear a thread de escuta, para que ela
+        # possar então prosseguir com o seu encerramento, uma vez que
+        # self.rodando agora é False.
         cliente_falso = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         cliente_falso.connect((self.host, self.porta))
         cliente_falso.close()
+        # Esperamos a thread de escuta chegar ao seu fim
         self.thread_escuta.join()
+        # Para então fecharmos seu socket
         self.socket_escuta.close()
         self.log("Encerrado.")
 
@@ -80,6 +97,9 @@ class Conexao:
 
     def __init__(self, conexao, endereco, arquivo, verbose=False):
         Conexao.count += 1
+        # Este ID é utilizado apena para fins de log, para diferenciar um
+        # cliente do outro de forma mais simples do que a combinação de
+        # IP e porta.
         self.id = Conexao.count
         self.conexao = conexao
         self.endereco = endereco
@@ -110,6 +130,8 @@ class Conexao:
                 self.log(mensagem)
                 campos = mensagem.split(',')
 
+                # Aqui nós direcionamos cada mensagem para o método de
+                # tratamento adequado.
                 try:
                     if campos[0] == MSG_ADICIONA_USUARIO:
                         self.adiciona_usuario(*campos[1:])
@@ -132,7 +154,7 @@ class Conexao:
                     elif campos[0] == MSG_SAIR:
                         self.sair()
                 except Exception as e:
-                    print 'Error: ', e
+                    self.log('Error: ' + str(e))
 
                 mensagem = self.conexao.recv(4096)
         finally:
@@ -142,25 +164,33 @@ class Conexao:
         try:
             u = self.arquivo.get_usuario_por_nome(nome)
             if u is not None:
+                # Se achou um usuário com o mesmo nome, responde com 'not_ok'
                 self.responde_erro()
             else:
                 new_u = Usuario(nome, telefone, endereco, email, senha)
                 self.arquivo.salva_usuario(new_u)
                 self.responde_sucesso()
         except ValueError:
+            # O construtor de Usuario retorna ValueError caso o nome
+            # do usuário seja vazio. Nesse caso responde com 'not_ok',
+            # pois não se pode criar um usuário inválido (nome vazio).
             self.responde_erro()
 
     def apaga_usuario(self, nome, senha):
+        # Se não estiver logado, responde com 'not_ok', pois precisa estar
+        # logado para realizar esta ação.
         if not self.logado:
             self.responde_erro()
             return
 
+        # Somente permite deletar o próprio usuário
         if nome != self.nome_usuario:
             self.responde_erro()
             return
 
         ok = self.arquivo.apaga_usuario(nome, senha)
         if ok:
+            # Após deletar seu usuário, o cliente é automaticamente deslogado
             self.sair()
         else:
             self.responde_erro()
@@ -199,7 +229,7 @@ class Conexao:
             )
             self.responde_sucesso()
         except ValueError as e:
-            print e
+            self.log('Error: ' + str(e))
             self.responde_erro()
 
     def entrar_leilao(self, identificador_leilao):
@@ -234,6 +264,8 @@ class Conexao:
         id_leilao = int(identificador_leilao)
         ids_leiloes_usuario = self.arquivo\
             .get_ids_leiloes_dos_quais_o_usuario_participa(self.nome_usuario)
+        # Se o usuário está tentando dar um lance num leilão do qual ele não
+        # participa, responde com 'not_ok'
         if id_leilao not in ids_leiloes_usuario:
             self.responde_erro()
         else:
@@ -245,6 +277,10 @@ class Conexao:
             else:
                 self.responde_erro()
 
+    # Retorna a informação mais recente para cada um dos leilões dos quais
+    # o usuário participa. A informação pode ser de Lance ou de Fim_leilao. Se
+    # for de Fim_leilao, ainda pode contar as informações Contato_cliente ou
+    # Contato_vendedor.
     def informacao_leiloes(self):
         if not self.logado:
             self.responde_erro()
@@ -318,10 +354,14 @@ class Conexao:
             self.responde_erro()
 
     def responde_erro(self):
-        self.conexao.sendall('not_ok')
+        # Envia a mensagem 'not_ok' pro cliente, indicando operação não
+        # realizada com sucesso
+        self.conexao.sendall(MSG_NOT_OK)
 
     def responde_sucesso(self):
-        self.conexao.sendall('ok')
+        # Envia a mensagem 'ok' pro cliente, indicando operação realizada
+        # com sucesso
+        self.conexao.sendall(MSG_OK)
 
     def log(self, msg):
         if self.verbose:
@@ -329,9 +369,11 @@ class Conexao:
 
 
 if __name__ == '__main__':
-    servidor = Servidor(verbose=True)
+    ip = raw_input('Entre com o IP do servidor: ')
+    porta = int(raw_input('Entre com a porta do servidor: '))
+    servidor = Servidor(ip, porta, verbose=True)
     try:
-        raw_input('Pressione Enter para encerrar o servidor.\n')
+        raw_input('Pressione [ENTER] para encerrar o servidor.\n')
     except KeyboardInterrupt:
         pass
     servidor.parar()

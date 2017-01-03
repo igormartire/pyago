@@ -66,15 +66,27 @@ class Leilao:
         return NotImplemented
 
     def entrada_permitida(self):
+        # A entrada não é permitida se o leilão já estiver finalizado.
         if self.finalizado():
             return False
+        # A entrada é permitida se o leilão já estiver iniciado
         if datetime.now() >= self.datahora_inicio:
             return True
+        # A entrada é permitida até 30 minutos antes do início do leilão
         if (self.datahora_inicio - datetime.now()).seconds <= 60 * 30:
             return True
         return False
 
     def lance(self, valor, nome_autor):
+        # O valor é válido se o leilão estiver acontecendo e o lance for maior
+        # do que o lance atual. Este é um ponto crítico (onde duas threads não
+        # devem pode acessar ao mesmo tempo) pois decisões são tomadas com
+        # base em valores de variáveis compartilhadas (no caso, o valor do
+        # lance_atual do leilão). Por isso, quem chama esta função é, na
+        # verdade, o módulo arquivo, em seu método lance_leilao(), que adquire
+        # o lock sobre o arquivo de leiloes e, portanto, evita interferência
+        # de outras threads que possam estar querendo acessar/modificar o
+        # mesmo valor utilizado aqui.
         if self.iniciado() and valor > self.lance_atual:
             self.lance_atual = valor
             self.nome_autor_do_lance = nome_autor
@@ -85,9 +97,12 @@ class Leilao:
             return False
 
     def iniciado(self):
+        # Retorna True se o leilão estiver acontencendo
         return datetime.now() > self.datahora_inicio and not self.finalizado()
 
     def finalizado(self):
+        # Retorna True se o leilão já tiver acabado, isto é, não recebeu nenhum
+        # lance durante um período equivalente ao seu "tempo máximo sem lances"
         agora = datetime.now()
         if agora > self.datahora_inicio:
             tempo_sem_lances = agora - self.datahora_ultimo_lance
@@ -96,6 +111,8 @@ class Leilao:
         return False
 
     def tempo_restante(self):
+        # Calcula quantos segundos ainda resta antes que o leilão seja
+        # finalizado caso não seja feito nenhum lance.
         agora = datetime.now()
         if agora < self.datahora_inicio:
             return "não iniciado"
